@@ -6,6 +6,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -41,6 +42,6 @@ class ZodiacCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             return await self.client.get_shadow(self.serial)
         except IAquaLinkAuthError as err:
-            raise UpdateFailed(f"Authentication error: {err}") from err
+            raise ConfigEntryAuthFailed(f"Authentication error: {err}") from err
         except IAquaLinkApiError as err:
             raise UpdateFailed(f"API error: {err}") from err

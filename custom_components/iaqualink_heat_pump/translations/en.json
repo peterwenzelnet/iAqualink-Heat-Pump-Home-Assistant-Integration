@@ -8,6 +8,21 @@
           "email": "Email",
           "password": "Password"
         }
+      },
+      "reauth_confirm": {
+        "title": "Update iAquaLink password",
+        "description": "Your iAquaLink credentials were rejected. Enter the current password for {email} to reconnect.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Update iAquaLink login",
+        "description": "Update the email and password used to connect to the iAquaLink cloud. The sensors will reload after saving.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -17,7 +32,10 @@
       "unknown": "Unexpected error. Check the Home Assistant log for details."
     },
     "abort": {
-      "already_configured": "This iAquaLink account is already configured."
+      "already_configured": "This iAquaLink account is already configured.",
+      "reauth_successful": "iAquaLink credentials updated. Reloading sensors.",
+      "reconfigure_successful": "iAquaLink login updated. Reloading sensors.",
+      "unknown": "Unexpected error. Check the Home Assistant log for details."
     }
   }
 }
