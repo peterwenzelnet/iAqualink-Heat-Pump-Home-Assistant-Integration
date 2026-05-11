@@ -16,6 +16,9 @@ This first release is **read-only**: it polls the device shadow and dynamically 
 
 ## Installation
 
+<img width="337" height="539" alt="image" src="https://github.com/user-attachments/assets/c016eb17-87aa-4ea0-bb18-46f95bbc62d2" />
+
+
 ### Via HACS (custom repository)
 
 1. In HACS → Integrations → ⋮ → **Custom repositories**, add:
