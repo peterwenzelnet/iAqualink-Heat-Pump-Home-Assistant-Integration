@@ -1,8 +1,9 @@
-"""Sensors auto-discovered from the Zodiac iAquaLink shadow document."""
+"""Curated sensors from the Zodiac iAquaLink shadow document."""
 from __future__ import annotations
 
-import logging
-from typing import Any, Iterator
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Callable
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -10,22 +11,64 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfPressure, UnitOfTemperature
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import EntityCategory, UnitOfTemperature
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ZodiacCoordinator
 
-_LOGGER = logging.getLogger(__name__)
 
-# AWS IoT shadow envelope keys that carry no user-facing telemetry.
-SKIPPED_KEYS = {"timestamp", "version", "metadata", "delta", "clientToken"}
+def _tenth_degrees(value: Any) -> float | None:
+    """Cloud reports tenths of a degree (e.g. 135 -> 13.5 °C)."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value / 10
+    return None
 
-TEMPERATURE_HINTS = ("temp", "temperature", "tset", "tair", "twater", "setpoint")
-PRESSURE_HINTS = ("pressure", "bar")
-PERCENT_HINTS = ("humidity", "percent", "level")
+
+@dataclass(frozen=True)
+class ZodiacSensorSpec:
+    path: tuple[str, ...]
+    name: str
+    unit: str | None = None
+    device_class: SensorDeviceClass | None = None
+    state_class: SensorStateClass | None = None
+    entity_category: EntityCategory | None = None
+    icon: str | None = None
+    transform: Callable[[Any], Any] | None = None
+
+
+SENSORS: tuple[ZodiacSensorSpec, ...] = (
+    ZodiacSensorSpec(
+        path=("equipment", "hp_0", "sns_1", "value"),
+        name="Water temperature",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        transform=_tenth_degrees,
+    ),
+    ZodiacSensorSpec(
+        path=("equipment", "hp_0", "sns_2", "value"),
+        name="Air temperature",
+        unit=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        transform=_tenth_degrees,
+    ),
+    ZodiacSensorSpec(
+        path=("dt",),
+        name="Equipment ID",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:identifier",
+    ),
+    ZodiacSensorSpec(
+        path=("ip",),
+        name="IP address",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:ip-network",
+    ),
+)
 
 
 async def async_setup_entry(
@@ -34,92 +77,39 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: ZodiacCoordinator = hass.data[DOMAIN][entry.entry_id]
-
-    known_paths: set[tuple[str, ...]] = set()
-
-    @callback
-    def _create_new_entities() -> None:
-        new: list[ShadowSensor] = []
-        for path, _ in _iter_leaves(coordinator.data or {}):
-            if path in known_paths or not path:
-                continue
-            known_paths.add(path)
-            new.append(ShadowSensor(coordinator, path))
-        if new:
-            async_add_entities(new)
-
-    _create_new_entities()
-    entry.async_on_unload(coordinator.async_add_listener(_create_new_entities))
+    entities: list[SensorEntity] = [
+        ZodiacShadowSensor(coordinator, spec) for spec in SENSORS
+    ]
+    entities.append(ZodiacLastUpdateSensor(coordinator))
+    async_add_entities(entities)
 
 
-def _iter_leaves(
-    data: Any, path: tuple[str, ...] = ()
-) -> Iterator[tuple[tuple[str, ...], Any]]:
-    if isinstance(data, dict):
-        # Unwrap AWS IoT shadow envelope so paths don't carry "state.reported.*" noise.
-        if path == () and isinstance(data.get("state"), dict):
-            reported = data["state"].get("reported")
-            if isinstance(reported, dict):
-                yield from _iter_leaves(reported, path)
-                return
-        for key, value in data.items():
-            if key in SKIPPED_KEYS:
-                continue
-            yield from _iter_leaves(value, path + (str(key),))
-    elif _looks_like_sensor_value(data):
-        yield path, data
-
-
-def _looks_like_sensor_value(value: Any) -> bool:
-    return isinstance(value, (str, int, float, bool))
-
-
-def _infer_unit_and_class(
-    path: tuple[str, ...],
-) -> tuple[str | None, SensorDeviceClass | None, SensorStateClass | None]:
-    name = "_".join(path).lower()
-    if any(h in name for h in TEMPERATURE_HINTS):
-        return (
-            UnitOfTemperature.CELSIUS,
-            SensorDeviceClass.TEMPERATURE,
-            SensorStateClass.MEASUREMENT,
-        )
-    if any(h in name for h in PRESSURE_HINTS):
-        return (
-            UnitOfPressure.BAR,
-            SensorDeviceClass.PRESSURE,
-            SensorStateClass.MEASUREMENT,
-        )
-    if any(h in name for h in PERCENT_HINTS):
-        return PERCENTAGE, None, SensorStateClass.MEASUREMENT
-    return None, None, None
-
-
-class ShadowSensor(CoordinatorEntity[ZodiacCoordinator], SensorEntity):
+class ZodiacShadowSensor(CoordinatorEntity[ZodiacCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: ZodiacCoordinator, path: tuple[str, ...]) -> None:
+    def __init__(
+        self, coordinator: ZodiacCoordinator, spec: ZodiacSensorSpec
+    ) -> None:
         super().__init__(coordinator)
-        self._path = path
-        self._attr_unique_id = f"{coordinator.serial}_{'_'.join(path)}"
-        self._attr_name = " ".join(path).replace("_", " ").title()
+        self._spec = spec
+        self._attr_unique_id = f"{coordinator.serial}_{'_'.join(spec.path)}"
+        self._attr_name = spec.name
         self._attr_device_info = coordinator.device_info
+        self._attr_native_unit_of_measurement = spec.unit
+        self._attr_device_class = spec.device_class
+        self._attr_state_class = spec.state_class
+        self._attr_entity_category = spec.entity_category
+        self._attr_icon = spec.icon
 
-        sample = self._read(coordinator.data)
-        if isinstance(sample, (int, float)) and not isinstance(sample, bool):
-            unit, device_class, state_class = _infer_unit_and_class(path)
-            self._attr_native_unit_of_measurement = unit
-            self._attr_device_class = device_class
-            self._attr_state_class = state_class
-
-    def _read(self, data: Any) -> Any:
-        # Mirror the unwrap done in _iter_leaves so the path resolves correctly.
+    def _read(self) -> Any:
+        data = self.coordinator.data
+        # Unwrap AWS IoT shadow envelope: {"state": {"reported": {...}}}
         if isinstance(data, dict) and isinstance(data.get("state"), dict):
             reported = data["state"].get("reported")
             if isinstance(reported, dict):
                 data = reported
         node: Any = data
-        for key in self._path:
+        for key in self._spec.path:
             if not isinstance(node, dict) or key not in node:
                 return None
             node = node[key]
@@ -127,7 +117,31 @@ class ShadowSensor(CoordinatorEntity[ZodiacCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> Any:
-        value = self._read(self.coordinator.data)
-        if isinstance(value, bool):
-            return "on" if value else "off"
+        value = self._read()
+        if self._spec.transform is not None:
+            return self._spec.transform(value)
         return value
+
+
+class ZodiacLastUpdateSensor(CoordinatorEntity[ZodiacCoordinator], SensorEntity):
+    _attr_has_entity_name = True
+    _attr_name = "Last update"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:clock-outline"
+
+    def __init__(self, coordinator: ZodiacCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.serial}_last_update"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def native_value(self) -> datetime | None:
+        # Prefer the cloud's own shadow timestamp; fall back to the last
+        # successful poll if the field is missing.
+        data = self.coordinator.data
+        if isinstance(data, dict):
+            ts = data.get("timestamp")
+            if isinstance(ts, (int, float)) and not isinstance(ts, bool):
+                return datetime.fromtimestamp(ts, tz=timezone.utc)
+        return self.coordinator.last_data_time

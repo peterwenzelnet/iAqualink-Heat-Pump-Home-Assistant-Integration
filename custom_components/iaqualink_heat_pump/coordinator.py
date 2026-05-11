@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -37,11 +38,14 @@ class ZodiacCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.client = client
         self.serial = serial
         self.device_info = device_info
+        self.last_data_time: datetime | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
-            return await self.client.get_shadow(self.serial)
+            data = await self.client.get_shadow(self.serial)
         except IAquaLinkAuthError as err:
             raise ConfigEntryAuthFailed(f"Authentication error: {err}") from err
         except IAquaLinkApiError as err:
             raise UpdateFailed(f"API error: {err}") from err
+        self.last_data_time = datetime.now(timezone.utc)
+        return data
