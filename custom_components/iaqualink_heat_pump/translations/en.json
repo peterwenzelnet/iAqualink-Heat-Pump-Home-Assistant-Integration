@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zodiac iAquaLink",
+        "description": "Sign in with the same email and password you use in the iAquaLink mobile app.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password.",
+      "cannot_connect": "Cannot reach the iAquaLink cloud.",
+      "no_heat_pump": "Logged in, but no heat pump (zs500/hpm) was found on this account.",
+      "unknown": "Unexpected error. Check the Home Assistant log for details."
+    },
+    "abort": {
+      "already_configured": "This iAquaLink account is already configured."
+    }
+  }
+}

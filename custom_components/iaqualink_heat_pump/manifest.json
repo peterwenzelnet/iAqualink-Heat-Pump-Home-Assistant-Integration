@@ -1,0 +1,12 @@
+{
+  "domain": "iaqualink_heat_pump",
+  "name": "iAqualink Heat Pump (Unofficial)",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/peterwenzelnet/iAqualink-Heat-Pump-Home-Assistant-Integration",
+  "issue_tracker": "https://github.com/peterwenzelnet/iAqualink-Heat-Pump-Home-Assistant-Integration/issues",
+  "codeowners": ["@peterwenzelnet"],
+  "requirements": [],
+  "iot_class": "cloud_polling",
+  "integration_type": "device"
+}
