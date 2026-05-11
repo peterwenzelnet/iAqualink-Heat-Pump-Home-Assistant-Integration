@@ -1,5 +1,8 @@
 # iAqualink Heat Pump — Home Assistant Integration
 
+This is the result:
+<img width="337" height="539" alt="image" src="https://github.com/user-attachments/assets/c016eb17-87aa-4ea0-bb18-46f95bbc62d2" />
+
 > ⚠️ **Unofficial.** This is **NOT** an official integration. It is not affiliated with, endorsed by, or supported by Zodiac, Fluidra, iAquaLink, or Home Assistant. Use at your own risk. The iAquaLink cloud API may change or break this integration at any time without notice.
 
 A community-built Home Assistant custom integration for Zodiac / Fluidra heat pumps (device types `zs500` and `hpm`) connected via the iAquaLink cloud.
@@ -15,9 +18,6 @@ This first release is **read-only**: it polls the device shadow and dynamically 
 - Polls every 60 seconds via cloud (`iot_class: cloud_polling`)
 
 ## Installation
-
-<img width="337" height="539" alt="image" src="https://github.com/user-attachments/assets/c016eb17-87aa-4ea0-bb18-46f95bbc62d2" />
-
 
 ### Via HACS (custom repository)
 
